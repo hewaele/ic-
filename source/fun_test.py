@@ -36,35 +36,58 @@ class REC():
         for i, v1 in enumerate(result):
             for j, v2 in enumerate(result[i][:]):
                 if v2 >= threshold:
-                    self.pre_result.append([c, j, i, w, h, v2])
+                    self.pre_result.append([int(c), j, i, j+w, i+h, v2])
 
     #执行框融合
-    def op_result(self):
-        l = [1 for i in range(len(self.pre_result))]
-        #根据x值进行重新排序
-        self.pre_result.sort(key = lambda s:s[1])
-        print(self.pre_result)
-        print(len(self.pre_result))
-        tmp = self.pre_result[:][:]
-        for index in range(len(tmp)-1):
-            if -4<tmp[index][1]-tmp[index+1][1]<4:
-                if tmp[index][1] > tmp[index+1][1]:
-                    l[index] = 1
-                else:
-                    l[index] = 0
+    def py_nms(self, dets, thresh):
+        # x1、y1、x2、y2、以及score赋值
+        x1 = dets[:, 1]
+        y1 = dets[:, 2]
+        x2 = dets[:, 3]
+        y2 = dets[:, 4]
+        scores = dets[:, 5]
+        # 每一个候选框的面积
+        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+        # order是按照score降序排序的
+        order = scores.argsort()[::-1]
+        keep = []
+        while order.size > 0:
+            i = order[0]
+            keep.append(i)
+            # 计算当前概率最大矩形框与其他矩形框的相交框的坐标，会用到numpy的broadcast机制，得到的是向量
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
 
-        for i in range(len(l)):
-            if l[i] == 1:
-                print(self.pre_result[i][0])
+            # 计算相交框的面积,注意矩形框不相交时w或h算出来会是负数，用0代替
+            w = np.maximum(0.0, xx2 - xx1 + 1)
+            h = np.maximum(0.0, yy2 - yy1 + 1)
+            inter = w * h
+            # 计算重叠度IOU：重叠面积/（面积1+面积2-重叠面积）
+            ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
+            # 找到重叠度不高于阈值的矩形框索引
+            inds = np.where(ovr <= thresh)[0]
+            # 将order序列更新，由于前面得到的矩形框索引要比矩形框在原order序列中的索引小1，所以要把这个1加回来
+            order = order[inds + 1]
+        return keep
 
-
-
-
-
+    def show_image(self, img):
+        for i in self.pre_result:
+            cv2.rectangle(img, (i[1], i[2]), (i[3], i[4]), (0, 0, 255), 2)
+        cv2.namedWindow('image')
+        cv2.imshow('image', img)
+        cv2.waitKey(0)
     #
-    def real_result(self):
-        pass
+    def real_result(self, result, index):
+        tmp_result = []
+        for i in index:
+            tmp_result.append(result[i])
+
+        tmp_result.sort(key=lambda s:s[1])
+        a = np.array(tmp_result)[:,0]
+        print(str(a))
 
     #执行匹配
     def match(self):
@@ -79,22 +102,19 @@ class REC():
             w, h = template.shape[::-1]
             res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
             #选取制定阈值结果
-            self.chance_result(imgi[:-4], res, w, h, 0.9)
+            self.chance_result(imgi[:-4], res, w, h, 0.85)
 
-            # for pt in zip(*loc[::-1]):
-            #     #将结果保存
-            #     print(pt)
-            #     tmp_result.append([imgi[:-4], pt[0], pt[1], w, h])
-            #
-            #     cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
+        result_index = self.py_nms(np.array(self.pre_result), 0.35)
+        print(result_index)
+        self.real_result(self.pre_result, result_index)
+        self.show_image(img_rgb)
 
-        self.op_result()
-        cv2.namedWindow('img')
-        cv2.imshow('img', img_rgb)
-        cv2.waitKey(0)
+        # cv2.namedWindow('img')
+        # cv2.imshow('img', img_rgb)
+        # cv2.waitKey(0)
         print('match success!')
 
-    #将洁厕结果转换为csv文件用于分析
+    #将检测结果转换为csv文件用于分析
     def csv_result(self):
         pass
 
