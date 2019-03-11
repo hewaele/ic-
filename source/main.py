@@ -103,11 +103,19 @@ class mywindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #             print('zhongjian')
     #     # do something
 
+    def get_pos(self, img):
+        #先获取姓名的位置，根据名字的位置获取ic卡相对位置,赶回截图位置
+        #载入name模板图片
+        print(os.getcwd())
+        module = cv2.imread('../module/name.jpg', 0)
+        w, h = module.shape[::-1]
+
+
     def get_match_result(self):
         #读入显示的图片
         img_rgb = cv2.imread(self.image_list[self.image_index])
         img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
-
+        self.get_pos(img_rgb)
         #循环匹配模板
         print('match test')
         print(self.module_path)
